@@ -6,6 +6,7 @@
     android:background="#F5F5F5"
     android:layoutDirection="rtl">
 
+    <!-- Header -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -33,21 +34,87 @@
             android:layout_marginTop="4dp"/>
     </LinearLayout>
 
+    <!-- Add Account Section -->
+    <androidx.cardview.widget.CardView
+        xmlns:app="http://schemas.android.com/apk/res-auto"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        app:cardCornerRadius="0dp"
+        app:cardElevation="2dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="12dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="الحسابات المراقبة"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:textColor="#EE1D52"
+                android:layout_marginBottom="8dp"/>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <EditText
+                    android:id="@+id/editAccount"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:hint="اسم الحساب بدون @"
+                    android:layout_marginEnd="8dp"
+                    android:inputType="text"/>
+
+                <Button
+                    android:id="@+id/btnAdd"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="إضافة"
+                    android:backgroundTint="#EE1D52"/>
+            </LinearLayout>
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/recyclerAccounts"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:nestedScrollingEnabled="false"/>
+
+        </LinearLayout>
+    </androidx.cardview.widget.CardView>
+
+    <!-- Feed Section -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="آخر الفيديوهات"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        android:textColor="#333333"
+        android:padding="12dp"/>
+
     <TextView
         android:id="@+id/tvEmpty"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="لا توجد فيديوهات بعد&#10;&#10;أضف حسابات تيك توك في ملف&#10;config/accounts.txt على GitHub"
-        android:textSize="16sp"
-        android:textColor="#666666"
+        android:text="لا توجد فيديوهات بعد&#10;أضف حسابات وانتظر المراقبة"
+        android:textSize="14sp"
+        android:textColor="#999999"
         android:gravity="center"
-        android:padding="32dp"
+        android:padding="24dp"
         android:visibility="gone"/>
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/recyclerFeed"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
         android:padding="8dp"/>
 
 </LinearLayout>
