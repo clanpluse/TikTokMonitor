@@ -122,7 +122,7 @@ class MainActivity : AppCompatActivity() {
     private fun loadAccounts() {
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                val text = URL(ACCOUNTS_URL).readText()
+                val text = URL("$ACCOUNTS_URL?t=${System.currentTimeMillis()}").readText()
                 val accounts = text.lines()
                     .map { it.trim() }
                     .filter { it.isNotEmpty() && !it.startsWith("#") }
