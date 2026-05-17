@@ -1,3 +1,4 @@
 anthropic
 yt-dlp
 schedule
+requests
