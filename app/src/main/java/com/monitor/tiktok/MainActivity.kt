@@ -1,10 +1,15 @@
 package com.monitor.tiktok
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.view.View
 import android.widget.*
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import androidx.work.*
@@ -36,6 +41,23 @@ class MainActivity : AppCompatActivity() {
     private lateinit var accountsAdapter: AccountsAdapter
 
     private val accountsList = mutableListOf<String>()
+
+    private val requestPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
+            if (!isGranted) {
+                Toast.makeText(this, "يرجى السماح بالإشعارات لتلقي التنبيهات", Toast.LENGTH_LONG).show()
+            }
+        }
+
+    private fun requestNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+                != PackageManager.PERMISSION_GRANTED
+            ) {
+                requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
+    }
 
     private fun getPatToken(): String {
         return getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
@@ -73,6 +95,8 @@ class MainActivity : AppCompatActivity() {
                 editAccount.text.clear()
             }
         }
+
+        requestNotificationPermission()
 
         if (getPatToken().isEmpty()) {
             showTokenDialog()

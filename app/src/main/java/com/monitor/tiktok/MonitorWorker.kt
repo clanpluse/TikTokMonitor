@@ -24,7 +24,7 @@ class MonitorWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, params
 
     override fun doWork(): Result {
         return try {
-            val json = URL(FEED_URL).readText()
+            val json = URL("$FEED_URL?t=${System.currentTimeMillis()}").readText()
             val array = JSONArray(json)
             if (array.length() == 0) return Result.success()
 
