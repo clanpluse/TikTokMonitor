@@ -13,7 +13,7 @@ client = Anthropic(api_key=ANTHROPIC_API_KEY) if ANTHROPIC_API_KEY else None
 
 def get_tiktok_videos(username):
     """Get latest videos from TikTok account using Apify."""
-    url = "https://api.apify.com/v2/acts/clockworks~tiktok-profile-scraper/run-sync-get-dataset-items"
+    url = "https://api.apify.com/v2/acts/clockworks~free-tiktok-scraper/run-sync-get-dataset-items"
     params = {
         "token": APIFY_TOKEN,
         "timeout": 60,
@@ -21,7 +21,10 @@ def get_tiktok_videos(username):
     }
     payload = {
         "profiles": [f"https://www.tiktok.com/@{username}"],
-        "resultsPerPage": 5
+        "resultsPerPage": 5,
+        "shouldDownloadVideos": False,
+        "shouldDownloadCovers": False,
+        "shouldDownloadSubtitles": False
     }
 
     try:
