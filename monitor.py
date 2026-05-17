@@ -1,39 +1,63 @@
 import os
 import json
+import time
 import requests
-import feedparser
 from anthropic import Anthropic
 from datetime import datetime
 
 ANTHROPIC_API_KEY = os.environ.get('ANTHROPIC_API_KEY')
-RSSHUB_BASE = "https://rsshub.app/tiktok/user/@{}"
+APIFY_TOKEN = os.environ.get('APIFY_TOKEN')
 
 client = Anthropic(api_key=ANTHROPIC_API_KEY) if ANTHROPIC_API_KEY else None
 
 
-def get_tiktok_feed(username):
-    url = RSSHUB_BASE.format(username)
-    feed = feedparser.parse(url)
-    return feed.entries
+def get_tiktok_videos(username):
+    """Get latest videos from TikTok account using Apify."""
+    url = "https://api.apify.com/v2/acts/clockworks~tiktok-profile-scraper/run-sync-get-dataset-items"
+    params = {
+        "token": APIFY_TOKEN,
+        "timeout": 60,
+        "memory": 512
+    }
+    payload = {
+        "profiles": [f"https://www.tiktok.com/@{username}"],
+        "resultsPerPage": 5
+    }
+
+    try:
+        response = requests.post(url, params=params, json=payload, timeout=120)
+        if response.status_code == 200:
+            data = response.json()
+            return data if isinstance(data, list) else []
+        else:
+            print(f"Apify error {response.status_code}: {response.text[:200]}")
+            return []
+    except Exception as e:
+        print(f"Error fetching {username}: {e}")
+        return []
 
 
 def summarize_with_claude(title, description):
     if not client:
         return None
-    message = client.messages.create(
-        model="claude-haiku-4-5-20251001",
-        max_tokens=500,
-        messages=[{
-            "role": "user",
-            "content": (
-                f"لخص هذا الفيديو من تيك توك بالعربية في 3 نقاط رئيسية:\n"
-                f"العنوان: {title}\n"
-                f"الوصف: {description}\n\n"
-                f"اكتب الملخص بشكل واضح ومختصر."
-            )
-        }]
-    )
-    return message.content[0].text
+    try:
+        message = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=500,
+            messages=[{
+                "role": "user",
+                "content": (
+                    f"لخص هذا الفيديو من تيك توك بالعربية في 3 نقاط رئيسية:\n"
+                    f"العنوان: {title}\n"
+                    f"الوصف: {description}\n\n"
+                    f"اكتب الملخص بشكل واضح ومختصر."
+                )
+            }]
+        )
+        return message.content[0].text
+    except Exception as e:
+        print(f"Claude error: {e}")
+        return None
 
 
 def load_seen_ids():
@@ -80,55 +104,55 @@ def main():
         print("No accounts to monitor.")
         return
 
+    print(f"Monitoring {len(accounts)} accounts: {accounts}")
+
     seen_ids = load_seen_ids()
     feed_items = load_feed()
     new_items = []
 
     for username in accounts:
-        print(f"Checking @{username}...")
-        try:
-            entries = get_tiktok_feed(username)
-            for entry in entries[:5]:
-                video_id = entry.get('id') or entry.get('link', '')
-                if video_id in seen_ids:
-                    continue
+        print(f"\nChecking @{username}...")
+        videos = get_tiktok_videos(username)
+        print(f"  Found {len(videos)} videos")
 
-                title = entry.get('title', '')
-                description = entry.get('summary', '')
+        for video in videos:
+            video_id = str(video.get('id', video.get('webVideoUrl', '')))
+            if video_id in seen_ids:
+                continue
 
-                item = {
-                    'id': video_id,
-                    'username': username,
-                    'title': title,
-                    'description': description,
-                    'link': entry.get('link', ''),
-                    'published': entry.get('published', ''),
-                    'timestamp': datetime.now().isoformat(),
-                    'summary_ai': None
-                }
+            title = video.get('text', '') or video.get('desc', '')
+            description = title
+            link = video.get('webVideoUrl', '') or f"https://www.tiktok.com/@{username}"
 
-                if client:
-                    try:
-                        item['summary_ai'] = summarize_with_claude(title, description)
-                        print(f"  AI summary generated for: {title[:50]}")
-                    except Exception as e:
-                        print(f"  AI error: {e}")
+            item = {
+                'id': video_id,
+                'username': username,
+                'title': title,
+                'description': description,
+                'link': link,
+                'published': video.get('createTimeISO', datetime.now().isoformat()),
+                'timestamp': datetime.now().isoformat(),
+                'summary_ai': None
+            }
 
-                new_items.append(item)
-                seen_ids.add(video_id)
-                print(f"  New video: {title[:60]}")
+            if client and title:
+                item['summary_ai'] = summarize_with_claude(title, description)
+                print(f"  AI summary: done")
 
-        except Exception as e:
-            print(f"Error for @{username}: {e}")
+            new_items.append(item)
+            seen_ids.add(video_id)
+            print(f"  New video: {title[:60]}")
+
+        time.sleep(2)
 
     if new_items:
         feed_items = new_items + feed_items
         feed_items = feed_items[:100]
         save_feed(feed_items)
         save_seen_ids(seen_ids)
-        print(f"\nDone: {len(new_items)} new video(s) found.")
+        print(f"\nDone: {len(new_items)} new video(s) saved.")
     else:
-        print("\nNo new videos.")
+        print("\nNo new videos found.")
 
 
 if __name__ == '__main__':
