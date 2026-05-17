@@ -16,8 +16,9 @@ def get_tiktok_videos(username):
                 "yt-dlp",
                 "--flat-playlist",
                 "--dump-json",
-                "--playlist-end", "5",
+                "--playlist-end", "10",
                 "--no-warnings",
+                "--no-cache-dir",
                 f"https://www.tiktok.com/@{username}"
             ],
             capture_output=True,
