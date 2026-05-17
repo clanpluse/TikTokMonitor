@@ -1,10 +1,15 @@
 import os
 import json
 import subprocess
+import requests
+import base64
 from anthropic import Anthropic
 from datetime import datetime
 
 ANTHROPIC_API_KEY = os.environ.get('ANTHROPIC_API_KEY')
+GITHUB_TOKEN = os.environ.get('GITHUB_TOKEN')
+GITHUB_REPO = "clanpluse/TikTokMonitor"
+
 client = Anthropic(api_key=ANTHROPIC_API_KEY) if ANTHROPIC_API_KEY else None
 
 
@@ -69,42 +74,80 @@ def summarize_with_claude(title, description):
         return None
 
 
+def github_get_file(path):
+    """Get file content and SHA from GitHub."""
+    url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{path}"
+    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
+    response = requests.get(url, headers=headers)
+    if response.status_code == 200:
+        data = response.json()
+        content = base64.b64decode(data['content']).decode('utf-8')
+        return content, data['sha']
+    return None, None
+
+
+def github_update_file(path, content, sha, message):
+    """Update file content on GitHub."""
+    url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{path}"
+    headers = {
+        "Authorization": f"token {GITHUB_TOKEN}",
+        "Content-Type": "application/json"
+    }
+    encoded = base64.b64encode(content.encode('utf-8')).decode('utf-8')
+    body = {
+        "message": message,
+        "content": encoded,
+        "sha": sha
+    }
+    response = requests.put(url, headers=headers, json=body)
+    return response.status_code in [200, 201]
+
+
 def load_seen_ids():
-    try:
-        with open('data/seen_ids.json', 'r') as f:
-            return set(json.load(f))
-    except Exception:
-        return set()
+    content, _ = github_get_file('data/seen_ids.json')
+    if content:
+        try:
+            return set(json.loads(content))
+        except Exception:
+            pass
+    return set()
 
 
 def save_seen_ids(ids):
-    with open('data/seen_ids.json', 'w') as f:
-        json.dump(list(ids), f)
+    content, sha = github_get_file('data/seen_ids.json')
+    new_content = json.dumps(list(ids))
+    if sha:
+        github_update_file('data/seen_ids.json', new_content, sha, "Update seen IDs")
+    print("  Saved seen IDs")
 
 
 def load_feed():
-    try:
-        with open('data/feed.json', 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except Exception:
-        return []
+    content, _ = github_get_file('data/feed.json')
+    if content:
+        try:
+            return json.loads(content)
+        except Exception:
+            pass
+    return []
 
 
 def save_feed(items):
-    with open('data/feed.json', 'w', encoding='utf-8') as f:
-        json.dump(items, f, ensure_ascii=False, indent=2)
+    content, sha = github_get_file('data/feed.json')
+    new_content = json.dumps(items, ensure_ascii=False, indent=2)
+    if sha:
+        success = github_update_file('data/feed.json', new_content, sha, "Update feed")
+        print(f"  Feed saved: {success}")
 
 
 def load_accounts():
-    try:
-        with open('config/accounts.txt', 'r', encoding='utf-8') as f:
-            return [
-                line.strip()
-                for line in f
-                if line.strip() and not line.startswith('#')
-            ]
-    except Exception:
-        return []
+    content, _ = github_get_file('config/accounts.txt')
+    if content:
+        return [
+            line.strip()
+            for line in content.split('\n')
+            if line.strip() and not line.startswith('#')
+        ]
+    return []
 
 
 def main():
