@@ -1,42 +1,47 @@
 import os
 import json
-import time
-import requests
+import subprocess
 from anthropic import Anthropic
 from datetime import datetime
 
 ANTHROPIC_API_KEY = os.environ.get('ANTHROPIC_API_KEY')
-APIFY_TOKEN = os.environ.get('APIFY_TOKEN')
-
 client = Anthropic(api_key=ANTHROPIC_API_KEY) if ANTHROPIC_API_KEY else None
 
 
 def get_tiktok_videos(username):
-    """Get latest videos from TikTok account using Apify."""
-    url = "https://api.apify.com/v2/acts/clockworks~free-tiktok-scraper/run-sync-get-dataset-items"
-    params = {
-        "token": APIFY_TOKEN,
-        "timeout": 60,
-        "memory": 512
-    }
-    payload = {
-        "profiles": [f"https://www.tiktok.com/@{username}"],
-        "resultsPerPage": 5,
-        "shouldDownloadVideos": False,
-        "shouldDownloadCovers": False,
-        "shouldDownloadSubtitles": False
-    }
-
+    """Get latest videos from TikTok using yt-dlp."""
     try:
-        response = requests.post(url, params=params, json=payload, timeout=120)
-        if response.status_code == 200:
-            data = response.json()
-            return data if isinstance(data, list) else []
-        else:
-            print(f"Apify error {response.status_code}: {response.text[:200]}")
-            return []
+        result = subprocess.run(
+            [
+                "yt-dlp",
+                "--flat-playlist",
+                "--dump-json",
+                "--playlist-end", "5",
+                "--no-warnings",
+                f"https://www.tiktok.com/@{username}"
+            ],
+            capture_output=True,
+            text=True,
+            timeout=60
+        )
+
+        videos = []
+        for line in result.stdout.strip().split('\n'):
+            line = line.strip()
+            if line:
+                try:
+                    videos.append(json.loads(line))
+                except Exception:
+                    pass
+
+        print(f"  yt-dlp found {len(videos)} videos")
+        return videos
+
+    except subprocess.TimeoutExpired:
+        print(f"  Timeout for @{username}")
+        return []
     except Exception as e:
-        print(f"Error fetching {username}: {e}")
+        print(f"  Error: {e}")
         return []
 
 
@@ -59,7 +64,7 @@ def summarize_with_claude(title, description):
         )
         return message.content[0].text
     except Exception as e:
-        print(f"Claude error: {e}")
+        print(f"  Claude error: {e}")
         return None
 
 
@@ -116,16 +121,15 @@ def main():
     for username in accounts:
         print(f"\nChecking @{username}...")
         videos = get_tiktok_videos(username)
-        print(f"  Found {len(videos)} videos")
 
         for video in videos:
-            video_id = str(video.get('id', video.get('webVideoUrl', '')))
+            video_id = str(video.get('id', video.get('webpage_url', '')))
             if video_id in seen_ids:
                 continue
 
-            title = video.get('text', '') or video.get('desc', '')
-            description = title
-            link = video.get('webVideoUrl', '') or f"https://www.tiktok.com/@{username}"
+            title = video.get('title', '') or video.get('description', '')
+            description = video.get('description', '') or title
+            link = video.get('webpage_url', f"https://www.tiktok.com/@{username}")
 
             item = {
                 'id': video_id,
@@ -133,7 +137,7 @@ def main():
                 'title': title,
                 'description': description,
                 'link': link,
-                'published': video.get('createTimeISO', datetime.now().isoformat()),
+                'published': video.get('upload_date', datetime.now().strftime('%Y%m%d')),
                 'timestamp': datetime.now().isoformat(),
                 'summary_ai': None
             }
@@ -145,8 +149,6 @@ def main():
             new_items.append(item)
             seen_ids.add(video_id)
             print(f"  New video: {title[:60]}")
-
-        time.sleep(2)
 
     if new_items:
         feed_items = new_items + feed_items
