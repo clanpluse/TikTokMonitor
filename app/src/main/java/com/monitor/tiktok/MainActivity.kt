@@ -241,7 +241,8 @@ class MainActivity : AppCompatActivity() {
                             link = obj.optString("link"),
                             published = obj.optString("published"),
                             timestamp = obj.optString("timestamp"),
-                            summary_ai = obj.optString("summary_ai").ifEmpty { null }
+                            summary_description = obj.optString("summary_description").ifEmpty { null },
+                            summary_speech = obj.optString("summary_speech").ifEmpty { null }
                         )
                     )
                 }

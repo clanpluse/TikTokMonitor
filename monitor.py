@@ -121,33 +121,55 @@ def transcribe_audio(audio_path):
             pass
 
 
-def summarize_with_claude(title, description, transcript=None):
+def summarize_description(title, description):
+    """ملخص قصير من العنوان والوصف."""
     if not client:
         return None
     try:
-        if transcript:
-            content = (
-                f"لخص هذا الفيديو من تيك توك بالعربية في 3 نقاط رئيسية:\n"
-                f"العنوان: {title}\n"
-                f"النص المنطوق في الفيديو: {transcript}\n\n"
-                f"اكتب الملخص بشكل واضح ومختصر."
-            )
-        else:
-            content = (
-                f"لخص هذا الفيديو من تيك توك بالعربية في 3 نقاط رئيسية:\n"
-                f"العنوان: {title}\n"
-                f"الوصف: {description}\n\n"
-                f"اكتب الملخص بشكل واضح ومختصر."
-            )
-
         message = client.messages.create(
             model="claude-haiku-4-5-20251001",
-            max_tokens=500,
-            messages=[{"role": "user", "content": content}]
+            max_tokens=300,
+            messages=[{
+                "role": "user",
+                "content": (
+                    f"لخص هذا الفيديو من تيك توك بالعربية في 3 نقاط قصيرة:\n"
+                    f"العنوان: {title}\n"
+                    f"الوصف: {description}\n\n"
+                    f"اكتب الملخص بشكل مختصر جداً."
+                )
+            }]
         )
         return message.content[0].text
     except Exception as e:
-        print(f"  Claude error: {e}")
+        print(f"  Claude error (description): {e}")
+        return None
+
+
+def summarize_speech(title, transcript):
+    """ملخص مفصل من النص المنطوق."""
+    if not client or not transcript:
+        return None
+    try:
+        message = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=800,
+            messages=[{
+                "role": "user",
+                "content": (
+                    f"لخص محتوى هذا الفيديو من تيك توك بالعربية بشكل مفصل:\n"
+                    f"العنوان: {title}\n"
+                    f"النص المنطوق في الفيديو: {transcript}\n\n"
+                    f"اكتب ملخصاً شاملاً يتضمن:\n"
+                    f"- الفكرة الرئيسية\n"
+                    f"- أهم النقاط التي ذكرها المتحدث\n"
+                    f"- الخلاصة أو النتيجة\n"
+                    f"اكتب بأسلوب واضح ومفيد."
+                )
+            }]
+        )
+        return message.content[0].text
+    except Exception as e:
+        print(f"  Claude error (speech): {e}")
         return None
 
 
@@ -260,7 +282,8 @@ def main():
                 'link': link,
                 'published': video.get('upload_date', datetime.now().strftime('%Y%m%d')),
                 'timestamp': datetime.now().isoformat(),
-                'summary_ai': None
+                'summary_description': None,
+                'summary_speech': None
             }
 
             # Download and transcribe audio
@@ -274,20 +297,19 @@ def main():
                 else:
                     print(f"  🔇 No speech detected")
             else:
-                print(f"  Audio download failed, using metadata only")
+                print(f"  Audio download failed")
 
-            # Summarize with Claude
+            # Summary from description (always)
             if client and title:
-                summary = summarize_with_claude(title, description, transcript)
-                if transcript is None and audio_path is None:
-                    # Could not download audio
-                    item['summary_ai'] = summary
-                elif transcript is None:
-                    # Downloaded but no speech
-                    item['summary_ai'] = "🔇 بدون صوت"
-                else:
-                    item['summary_ai'] = summary
-                print(f"  AI summary: done")
+                item['summary_description'] = summarize_description(title, description)
+                print(f"  Description summary: done")
+
+            # Summary from speech
+            if client and transcript:
+                item['summary_speech'] = summarize_speech(title, transcript)
+                print(f"  Speech summary: done")
+            elif transcript is None and audio_path is not None:
+                item['summary_speech'] = "🔇 بدون صوت"
 
             new_items.append(item)
             seen_ids.add(video_id)

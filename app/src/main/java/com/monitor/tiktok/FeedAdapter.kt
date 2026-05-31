@@ -14,8 +14,9 @@ class FeedAdapter(private val items: List<FeedItem>) :
     class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
         val tvUsername: TextView = view.findViewById(R.id.tvUsername)
         val tvTitle: TextView = view.findViewById(R.id.tvTitle)
-        val tvSummaryAi: TextView = view.findViewById(R.id.tvSummaryAi)
-        val tvDescription: TextView = view.findViewById(R.id.tvDescription)
+        val tvSummaryDescription: TextView = view.findViewById(R.id.tvSummaryDescription)
+        val tvSummaryLabel: TextView = view.findViewById(R.id.tvSummaryLabel)
+        val tvSummarySpeech: TextView = view.findViewById(R.id.tvSummarySpeech)
         val tvTime: TextView = view.findViewById(R.id.tvTime)
         val btnWatch: TextView = view.findViewById(R.id.btnWatch)
     }
@@ -31,18 +32,25 @@ class FeedAdapter(private val items: List<FeedItem>) :
 
         holder.tvUsername.text = "@${item.username}"
         holder.tvTitle.text = item.title
+        holder.tvTime.text = item.published.take(16)
 
-        if (!item.summary_ai.isNullOrEmpty()) {
-            holder.tvSummaryAi.visibility = View.VISIBLE
-            holder.tvSummaryAi.text = item.summary_ai
-            holder.tvDescription.visibility = View.GONE
+        // Summary from description
+        if (!item.summary_description.isNullOrEmpty()) {
+            holder.tvSummaryDescription.visibility = View.VISIBLE
+            holder.tvSummaryDescription.text = item.summary_description
         } else {
-            holder.tvSummaryAi.visibility = View.GONE
-            holder.tvDescription.visibility = View.VISIBLE
-            holder.tvDescription.text = item.description
+            holder.tvSummaryDescription.visibility = View.GONE
         }
 
-        holder.tvTime.text = item.published.take(16)
+        // Summary from speech
+        if (!item.summary_speech.isNullOrEmpty()) {
+            holder.tvSummaryLabel.visibility = View.VISIBLE
+            holder.tvSummarySpeech.visibility = View.VISIBLE
+            holder.tvSummarySpeech.text = item.summary_speech
+        } else {
+            holder.tvSummaryLabel.visibility = View.GONE
+            holder.tvSummarySpeech.visibility = View.GONE
+        }
 
         holder.btnWatch.setOnClickListener {
             val intent = Intent(Intent.ACTION_VIEW, Uri.parse(item.link))
