@@ -3,6 +3,7 @@ import json
 import subprocess
 import requests
 import base64
+import tempfile
 from anthropic import Anthropic
 from datetime import datetime
 
@@ -11,6 +12,20 @@ GITHUB_TOKEN = os.environ.get('GITHUB_TOKEN')
 GITHUB_REPO = "clanpluse/TikTokMonitor"
 
 client = Anthropic(api_key=ANTHROPIC_API_KEY) if ANTHROPIC_API_KEY else None
+
+# Load Whisper model once at startup
+whisper_model = None
+def get_whisper_model():
+    global whisper_model
+    if whisper_model is None:
+        try:
+            import whisper
+            print("  Loading Whisper model...")
+            whisper_model = whisper.load_model("tiny")
+            print("  Whisper model loaded.")
+        except Exception as e:
+            print(f"  Whisper load error: {e}")
+    return whisper_model
 
 
 def get_tiktok_videos(username):
@@ -51,22 +66,84 @@ def get_tiktok_videos(username):
         return []
 
 
-def summarize_with_claude(title, description):
+def download_audio(video_url):
+    """Download audio from TikTok video and return path to audio file."""
+    try:
+        tmp = tempfile.NamedTemporaryFile(suffix='.mp3', delete=False)
+        tmp_path = tmp.name
+        tmp.close()
+
+        result = subprocess.run(
+            [
+                "yt-dlp",
+                "-x",
+                "--audio-format", "mp3",
+                "--audio-quality", "5",
+                "--no-warnings",
+                "--no-cache-dir",
+                "-o", tmp_path,
+                video_url
+            ],
+            capture_output=True,
+            text=True,
+            timeout=90
+        )
+
+        if os.path.exists(tmp_path) and os.path.getsize(tmp_path) > 0:
+            return tmp_path
+        else:
+            return None
+
+    except Exception as e:
+        print(f"  Audio download error: {e}")
+        return None
+
+
+def transcribe_audio(audio_path):
+    """Transcribe audio file using Whisper. Returns text or None."""
+    try:
+        model = get_whisper_model()
+        if not model:
+            return None
+
+        result = model.transcribe(audio_path, fp16=False)
+        text = result.get("text", "").strip()
+        return text if text else None
+
+    except Exception as e:
+        print(f"  Transcribe error: {e}")
+        return None
+    finally:
+        try:
+            if os.path.exists(audio_path):
+                os.unlink(audio_path)
+        except Exception:
+            pass
+
+
+def summarize_with_claude(title, description, transcript=None):
     if not client:
         return None
     try:
+        if transcript:
+            content = (
+                f"لخص هذا الفيديو من تيك توك بالعربية في 3 نقاط رئيسية:\n"
+                f"العنوان: {title}\n"
+                f"النص المنطوق في الفيديو: {transcript}\n\n"
+                f"اكتب الملخص بشكل واضح ومختصر."
+            )
+        else:
+            content = (
+                f"لخص هذا الفيديو من تيك توك بالعربية في 3 نقاط رئيسية:\n"
+                f"العنوان: {title}\n"
+                f"الوصف: {description}\n\n"
+                f"اكتب الملخص بشكل واضح ومختصر."
+            )
+
         message = client.messages.create(
             model="claude-haiku-4-5-20251001",
             max_tokens=500,
-            messages=[{
-                "role": "user",
-                "content": (
-                    f"لخص هذا الفيديو من تيك توك بالعربية في 3 نقاط رئيسية:\n"
-                    f"العنوان: {title}\n"
-                    f"الوصف: {description}\n\n"
-                    f"اكتب الملخص بشكل واضح ومختصر."
-                )
-            }]
+            messages=[{"role": "user", "content": content}]
         )
         return message.content[0].text
     except Exception as e:
@@ -186,8 +263,30 @@ def main():
                 'summary_ai': None
             }
 
+            # Download and transcribe audio
+            transcript = None
+            print(f"  Downloading audio for: {title[:40]}...")
+            audio_path = download_audio(link)
+            if audio_path:
+                transcript = transcribe_audio(audio_path)
+                if transcript:
+                    print(f"  Transcript: {transcript[:60]}...")
+                else:
+                    print(f"  🔇 No speech detected")
+            else:
+                print(f"  Audio download failed, using metadata only")
+
+            # Summarize with Claude
             if client and title:
-                item['summary_ai'] = summarize_with_claude(title, description)
+                summary = summarize_with_claude(title, description, transcript)
+                if transcript is None and audio_path is None:
+                    # Could not download audio
+                    item['summary_ai'] = summary
+                elif transcript is None:
+                    # Downloaded but no speech
+                    item['summary_ai'] = "🔇 بدون صوت"
+                else:
+                    item['summary_ai'] = summary
                 print(f"  AI summary: done")
 
             new_items.append(item)
